@@ -1,0 +1,131 @@
+name: Feedback
+on:
+  issues:
+    types: [opened, edited, closed, reopened]
+  issue_comment:
+    types: [created, edited]
+  repository_dispatch:
+    types: [portal-update]
+permissions:
+  issues: write
+  contents: read
+concurrency:
+  group: feedback-${{ github.event.issue.number || github.event.client_payload.issue || github.run_id }}
+  cancel-in-progress: false
+jobs:
+  feedback:
+    if: github.event_name == 'repository_dispatch' || !endsWith(github.actor, '[bot]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - uses: actions/github-script@v7
+        env:
+          INTAKE_URL: https://support.gablvm.org/api/github/intake
+          INTAKE_SECRET: ${{ secrets.PORTAL_INTAKE_SECRET }}
+          FEEDBACK_TOKEN: ${{ secrets.FEEDBACK_TOKEN }}
+        with:
+          script: |
+            const crypto = require('crypto');
+            const { scan } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/privacy-scan.js`);
+            const { owner, repo } = context.repo;
+            const fullRepo = `${owner}/${repo}`;
+            const ev = context.eventName;
+            const p = context.payload;
+
+            async function intake(data) {
+              const raw = JSON.stringify({ repo: fullRepo, ...data });
+              const sig = 'sha256=' + crypto.createHmac('sha256', process.env.INTAKE_SECRET).update(raw).digest('hex');
+              // A portal outage must never stop a private report from being moved or removed.
+              try {
+                const res = await fetch(process.env.INTAKE_URL, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-GABLVM-Signature': sig, 'User-Agent': 'gablvm-feedback-workflow' },
+                  body: raw,
+                });
+                const text = await res.text();
+                core.info(`portal intake ${data.event} #${data.number}: ${res.status} ${text.slice(0, 200)}`);
+                if (!res.ok) core.warning(`portal intake failed: ${res.status}`);
+              } catch (err) {
+                core.warning(`portal intake error: ${err.message}`);
+              }
+            }
+
+            if (ev === 'repository_dispatch') {
+              const c = p.client_payload || {};
+              const issue = Number(c.issue);
+              if (!Number.isInteger(issue) || issue < 1) { core.setFailed('bad issue number'); return; }
+              if (typeof c.reply === 'string' && c.reply.trim()) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: issue, body: c.reply.slice(0, 60000) });
+              }
+              if (c.close === true) {
+                await github.rest.issues.update({ owner, repo, issue_number: issue, state: 'closed', state_reason: 'completed' });
+              }
+              return;
+            }
+
+            if (ev === 'issues') {
+              const issue = p.issue;
+              const login = issue.user.login;
+              const action = p.action;
+              if (action === 'closed' || action === 'reopened') {
+                await intake({ event: action, number: issue.number, login });
+                return;
+              }
+              const reasons = scan(`${issue.title}\n${issue.body || ''}`);
+              if (reasons.length) {
+                const ids = await github.graphql(`query($o:String!){ r: repository(owner:$o, name:"feedback-private"){ id } }`, { o: owner, headers: { authorization: `token ${process.env.FEEDBACK_TOKEN}` } });
+                const moved = await github.graphql(
+                  `mutation($i:ID!,$r:ID!){ transferIssue(input:{issueId:$i, repositoryId:$r, createLabelsIfMissing:true}){ issue { url number } } }`,
+                  { i: issue.node_id, r: ids.r.id, headers: { authorization: `token ${process.env.FEEDBACK_TOKEN}` } }
+                );
+                core.info(`moved #${issue.number} to private #${moved.transferIssue.issue.number}`);
+                const stub = await github.rest.issues.create({
+                  owner, repo,
+                  title: 'A report was moved to keep your information private',
+                  body: [
+                    `@${login}, thank you for your report. It looked like it had ${reasons.join(', ')}, so we moved it somewhere private where only the GABLVM team can see it. Nothing was lost, and we will follow up here.`,
+                    '',
+                    'If you want to send a diagnostic log or anything personal, please use https://support.gablvm.org or Settings, Support in the app.',
+                  ].join('\n'),
+                });
+                await github.rest.issues.update({ owner, repo, issue_number: stub.data.number, state: 'closed', state_reason: 'completed' });
+                await github.rest.issues.lock({ owner, repo, issue_number: stub.data.number, lock_reason: 'resolved' });
+                await intake({ event: 'moved', number: stub.data.number, title: issue.title, body: issue.body || '', login, url: stub.data.html_url, private_url: moved.transferIssue.issue.url, reasons });
+                return;
+              }
+              if (action === 'opened') {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: issue.number,
+                  body: [
+                    'Thank you for the report. A member of the GABLVM team will read it and reply here.',
+                    '',
+                    'If this turns out to be a known issue, we will link it to the existing one so you can follow the fix.',
+                    '',
+                    'Known issues: https://go.gablvm.org/known',
+                  ].join('\n'),
+                });
+                await intake({ event: 'opened', number: issue.number, title: issue.title, body: issue.body || '', login, url: issue.html_url });
+              }
+              return;
+            }
+
+            if (ev === 'issue_comment') {
+              if (p.issue.pull_request) return;
+              const comment = p.comment;
+              const login = comment.user.login;
+              const reasons = scan(comment.body || '');
+              if (reasons.length) {
+                await intake({ event: 'comment_removed', number: p.issue.number, body: comment.body || '', login, reasons });
+                await github.rest.issues.deleteComment({ owner, repo, comment_id: comment.id });
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: p.issue.number,
+                  body: `@${login}, we removed your comment because it looked like it had ${reasons.join(', ')}. The GABLVM team kept a private copy. For anything personal, please use https://support.gablvm.org.`,
+                });
+                return;
+              }
+              if (p.action === 'created') {
+                await intake({ event: 'comment', number: p.issue.number, body: comment.body || '', login });
+              }
+            }

@@ -1,0 +1,17 @@
+name: Lock old closed issues
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+permissions:
+  issues: write
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dessant/lock-threads@v5
+        with:
+          issue-inactive-days: "30"
+          process-only: issues
+          issue-comment: >
+            This issue was closed a while ago, so it is now locked. If you still have the problem, please open a new issue and mention this one.
