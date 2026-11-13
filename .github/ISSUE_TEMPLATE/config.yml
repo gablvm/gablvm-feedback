@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Known issues
+    url: https://github.com/GABLVM/gablvm-feedback/issues?q=label%3Aknown-issue
+    about: Problems we already know about, and when each fix is planned.
+  - name: Private help or account questions
+    url: https://support.gablvm.org
+    about: For anything personal, or to send your diagnostic log. Only the GABLVM team sees it.

@@ -1,0 +1,71 @@
+name: Report a bug
+description: Something in the GABLVM app or website is not working the way it should.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping make GABLVM better. Everything on this page is public, so please do not include your name, phone number, email, location or anything else personal.
+
+        If you want to send your diagnostic log, use Settings, Support in the app, or the form at https://support.gablvm.org. Logs are never posted here.
+  - type: checkboxes
+    id: known
+    attributes:
+      label: Known issues
+      description: Some problems are already known and have a fix planned. You can check the list at https://github.com/GABLVM/gablvm-feedback/issues?q=label%3Aknown-issue
+      options:
+        - label: I checked the known issues, and this is not one of them, or I am adding something new to one.
+          required: true
+  - type: dropdown
+    id: product
+    attributes:
+      label: Where did it happen?
+      options:
+        - iPhone or iPad app
+        - gablvm.org website
+        - Support portal
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Tell us what you did and what you heard or saw.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to make it happen again
+      description: If you can, list the steps one per line, starting from the Home screen.
+      placeholder: |
+        1. Open the Quran tab.
+        2. Choose Read, then Al-Fatihah.
+        3. Choose Go to verse.
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: In the app, Settings, About shows the version, for example 1.2.2.
+  - type: input
+    id: device
+    attributes:
+      label: Device and system version
+      placeholder: iPhone 15, iOS 27.2
+  - type: checkboxes
+    id: assistive
+    attributes:
+      label: What were you using?
+      options:
+        - label: VoiceOver
+        - label: A braille display
+        - label: Braille Screen Input
+        - label: Zoom or a larger text size
+        - label: None of these
