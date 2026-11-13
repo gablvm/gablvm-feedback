@@ -16,7 +16,7 @@ jobs:
               "",
               "If this turns out to be a known issue, we will link it to the existing one so you can follow the fix.",
               "",
-              "Known issues: https://github.com/GABLVM/gablvm-feedback/issues?q=label%3Aknown-issue",
+              "Known issues: https://github.com/gablvm/gablvm-feedback/issues?q=label%3Aknown-issue",
             ].join("\n");
             await github.rest.issues.createComment({
               owner: context.repo.owner,

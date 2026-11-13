@@ -12,7 +12,7 @@ body:
     id: known
     attributes:
       label: Known issues
-      description: Some problems are already known and have a fix planned. You can check the list at https://github.com/GABLVM/gablvm-feedback/issues?q=label%3Aknown-issue
+      description: Some problems are already known and have a fix planned. You can check the list at https://github.com/gablvm/gablvm-feedback/issues?q=label%3Aknown-issue
       options:
         - label: I checked the known issues, and this is not one of them, or I am adding something new to one.
           required: true
