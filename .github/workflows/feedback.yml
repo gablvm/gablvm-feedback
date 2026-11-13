@@ -76,9 +76,18 @@ jobs:
               const reasons = scan(`${issue.title}\n${issue.body || ''}`);
               if (reasons.length) {
                 // GITHUB_TOKEN only reaches this repo; moving needs the token that also reaches the private one.
-                const pat = getOctokit(process.env.FEEDBACK_TOKEN);
-                const ids = await pat.graphql(`query($o:String!){ r: repository(owner:$o, name:"feedback-private"){ id } }`, { o: owner });
-                const moved = await pat.graphql(
+                async function patGraphql(query, variables) {
+                  const res = await fetch('https://api.github.com/graphql', {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${process.env.FEEDBACK_TOKEN}`, 'Content-Type': 'application/json', 'User-Agent': 'gablvm-feedback-workflow' },
+                    body: JSON.stringify({ query, variables }),
+                  });
+                  const j = await res.json();
+                  if (!res.ok || j.errors) throw new Error(`GraphQL ${res.status}: ${JSON.stringify(j.errors || j).slice(0, 300)}`);
+                  return j.data;
+                }
+                const ids = await patGraphql(`query($o:String!){ r: repository(owner:$o, name:"feedback-private"){ id } }`, { o: owner });
+                const moved = await patGraphql(
                   `mutation($i:ID!,$r:ID!){ transferIssue(input:{issueId:$i, repositoryId:$r, createLabelsIfMissing:true}){ issue { url number } } }`,
                   { i: issue.node_id, r: ids.r.id }
                 );
