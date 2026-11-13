@@ -75,10 +75,12 @@ jobs:
               }
               const reasons = scan(`${issue.title}\n${issue.body || ''}`);
               if (reasons.length) {
-                const ids = await github.graphql(`query($o:String!){ r: repository(owner:$o, name:"feedback-private"){ id } }`, { o: owner, headers: { authorization: `token ${process.env.FEEDBACK_TOKEN}` } });
-                const moved = await github.graphql(
+                // GITHUB_TOKEN only reaches this repo; moving needs the token that also reaches the private one.
+                const pat = getOctokit(process.env.FEEDBACK_TOKEN);
+                const ids = await pat.graphql(`query($o:String!){ r: repository(owner:$o, name:"feedback-private"){ id } }`, { o: owner });
+                const moved = await pat.graphql(
                   `mutation($i:ID!,$r:ID!){ transferIssue(input:{issueId:$i, repositoryId:$r, createLabelsIfMissing:true}){ issue { url number } } }`,
-                  { i: issue.node_id, r: ids.r.id, headers: { authorization: `token ${process.env.FEEDBACK_TOKEN}` } }
+                  { i: issue.node_id, r: ids.r.id }
                 );
                 core.info(`moved #${issue.number} to private #${moved.transferIssue.issue.number}`);
                 const stub = await github.rest.issues.create({
